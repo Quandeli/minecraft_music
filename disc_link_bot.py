@@ -7,6 +7,8 @@ import os
 import subprocess
 from dotenv import load_dotenv
 load_dotenv()
+GITHUB_USERNAME = os.getenv("GITHUB_USERNAME")
+REPO_NAME = os.getenv("REPO_NAME")
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -124,7 +126,7 @@ async def on_message(message):
 
 
             # Generate the true raw direct audio streaming URL pipe
-            direct_streaming_url = f"https://githubusercontent.com{GITHUB_USERNAME}/{REPO_NAME}/main/{safe_name}"
+            direct_streaming_url = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{REPO_NAME}/main/{safe_name}"
 
             await ctx.send(
                 f"🎵 **Track Permanently Anchored!**\n"
