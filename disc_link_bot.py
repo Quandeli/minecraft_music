@@ -51,13 +51,14 @@ async def on_message(message):
 
     ydl_opts = {
         'format': 'bestaudio/best',
+        'cookiefile': 'cookies.txt',
         'outtmpl': temp_outtmpl + '.%(ext)s', 
         'ignoreerrors': True,
         'quiet': True,
         'noplaylist': True,
         'no_warnings': True,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 OPR/134.0.0.0 (Edition std-2)',
         },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
