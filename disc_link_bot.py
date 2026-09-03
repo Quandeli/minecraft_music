@@ -52,7 +52,7 @@ async def on_message(message):
     ydl_opts = {
         'format': 'bestaudio/best',
         'cookiefile': 'cookies.txt',
-        'outtmpl': temp_outtmpl + '.%(ext)s', 
+        'outtmpl': temp_outtmpl + '.%(ext)s',
         'ignoreerrors': True,
         'quiet': True,
         'noplaylist': True,
@@ -67,80 +67,104 @@ async def on_message(message):
         }],
     }
 
-    try:
-        title = "Unknown Song"
-        artist = "Unknown Artist"
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            if not info:
-                await ctx.send("❌ Track signature missing or rejected by provider.")
-                return
-            
-            title = info.get('track', info.get('title', 'Unknown Song'))
-            artist = info.get('artist', 'Unknown Artist')
-
-            if " - " in title and artist == "Unknown Artist":
-                parts = title.split(" - ", 1)
-                artist = parts[0].strip()
-                title = parts[1].strip()
-
-            ydl.download([url])
-        
+    if "spotify.com" in url.lower():
         generated_mp3 = temp_outtmpl + ".mp3"
-        
-        if os.path.exists(generated_mp3):
-            # Stamp metadata natively for the Minecraft mod UI container layout
-            audiofile = eyed3.load(generated_mp3)
-            if audiofile.tag is None:
-                audiofile.initTag()
-            audiofile.tag.title = title
-            audiofile.tag.artist = artist
-            audiofile.tag.save()
-
-            # Format structural filename safe for Git terminal queries
-            safe_name = f"{artist}_{title}_{unique_stamp}.mp3".replace(" ", "_").replace("/", "_").replace("\\", "_").replace("?", "")
-            permanent_filepath = os.path.join(MUSIC_REPO_DIR, safe_name)
-            
-            # Move the file to its permanent repo index position
-            os.rename(generated_mp3, permanent_filepath)
-
-            # --- FIX: SELF-INITIALIZING GIT PIPELINE ---
-                        # --- STABLE HARDCODED REPOSITORY PUSH PIPELINE ---
-            def push_to_github():
-                # 1. If the hidden .git directory is missing, build it automatically!
-                if not os.path.exists(os.path.join(MUSIC_REPO_DIR, ".git")):
-                    print("🔧 Initializing Git repository automatically...")
-                    subprocess.run("git init", shell=True, cwd=MUSIC_REPO_DIR, check=True)
-                    subprocess.run("git remote add origin https://github.com", shell=True, cwd=MUSIC_REPO_DIR, check=True)
-                    subprocess.run("git branch -M main", shell=True, cwd=MUSIC_REPO_DIR, check=True)
-                
-                # 2. Run standard file handoff sequences
-                subprocess.run("git add .", shell=True, cwd=MUSIC_REPO_DIR, check=True)
-                subprocess.run(f'git commit -m "Added track: {safe_name}"', shell=True, cwd=MUSIC_REPO_DIR, check=True)
-                
-                # --- FIXED: HARDCODED TO PUSH TO MAIN WITH ZERO ACCIDENTAL STRING DROPS ---
-                subprocess.run("git push -u origin main", shell=True, cwd=MUSIC_REPO_DIR, check=True)
-
-            await asyncio.to_thread(push_to_github)
-
-
-
-            # Generate the true raw direct audio streaming URL pipe
-            direct_streaming_url = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{REPO_NAME}/main/{safe_name}"
-
-            await ctx.send(
-                f"🎵 **Track Permanently Anchored!**\n"
-                f"**Song:** {title}\n"
-                f"**Artist:** {artist}\n\n"
-                f"📋 **Copy & Paste this link into the Music Disc Maker machine:**\n"
-                f"```{direct_streaming_url}```"
+        try:
+            result = subprocess.run(
+                ["spotdl", "download", url, "--output", temp_outtmpl + ".{output-ext}"],
+                capture_output=True, text=True, timeout=120
             )
-        else:
-            await ctx.send("❌ Local audio file structure mismatch.")
-    except Exception as e:
-        await ctx.send("❌ Deployment pipeline failed. Make sure Git is authenticated on your desktop.")
-        print(f"GitHub Thread Error: {e}")
+            print(result.stdout)
+            print(result.stderr)
+            if result.returncode != 0 or not os.path.exists(generated_mp3):
+                await ctx.send(f"❌ Spotify download failed: {result.stderr[:300]}")
+                return
+
+            from mutagen.easyid3 import EasyID3
+            try:
+                tags = EasyID3(generated_mp3)
+                title = tags.get('title', ["Unknown Song"])[0]
+                artist = tags.get('artist', ["Unknown Artist"])[0]
+            except Exception:
+                title, artist = "Unknown Song", "Unknown Artist"
+
+        except Exception as e:
+            await ctx.send(f"❌ Spotify download error: {e}")
+            return
+    else:
+        try:
+            title = "Unknown Song"
+            artist = "Unknown Artist"
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if not info:
+                    await ctx.send("❌ Track signature missing or rejected by provider.")
+                    return
+
+                title = info.get('track', info.get('title', 'Unknown Song'))
+                artist = info.get('artist', 'Unknown Artist')
+
+                if " - " in title and artist == "Unknown Artist":
+                    parts = title.split(" - ", 1)
+                    artist = parts[0].strip()
+                    title = parts[1].strip()
+
+                ydl.download([url])
+
+            generated_mp3 = temp_outtmpl + ".mp3"
+            if not os.path.exists(generated_mp3):
+                await ctx.send("❌ Local audio file structure mismatch.")
+                return
+        except Exception as e:
+            await ctx.send("❌ Download pipeline failed. Make sure Git is authenticated on your desktop.")
+            print(f"Download Error: {e}")
+            return
+
+        # Stamp metadata natively for the Minecraft mod UI container layout
+        audiofile = eyed3.load(generated_mp3)
+        if audiofile.tag is None:
+            audiofile.initTag()
+        audiofile.tag.title = title
+        audiofile.tag.artist = artist
+        audiofile.tag.save()
+
+        # Format structural filename safe for Git terminal queries
+        safe_name = f"{artist}_{title}_{unique_stamp}.mp3".replace(" ", "_").replace("/", "_").replace("\\", "_").replace("?", "")
+        permanent_filepath = os.path.join(MUSIC_REPO_DIR, safe_name)
+        
+        # Move the file to its permanent repo index position
+        os.rename(generated_mp3, permanent_filepath)
+
+        # --- SELF-INITIALIZING GIT PIPELINE ---
+        def push_to_github():
+            if not os.path.exists(os.path.join(MUSIC_REPO_DIR, ".git")):
+                print("🔧 Initializing Git repository automatically...")
+                subprocess.run("git init", shell=True, cwd=MUSIC_REPO_DIR, check=True)
+                subprocess.run("git remote add origin https://github.com", shell=True, cwd=MUSIC_REPO_DIR, check=True)
+                subprocess.run("git branch -M main", shell=True, cwd=MUSIC_REPO_DIR, check=True)
+
+            subprocess.run("git add .", shell=True, cwd=MUSIC_REPO_DIR, check=True)
+            subprocess.run(
+                f'git commit -m "Added track: {safe_name}"',
+                shell=True,
+                cwd=MUSIC_REPO_DIR,
+                check=True,
+            )
+            subprocess.run("git push -u origin main", shell=True, cwd=MUSIC_REPO_DIR, check=True)
+
+        await asyncio.to_thread(push_to_github)
+
+        # Generate the true raw direct audio streaming URL pipe.
+        direct_streaming_url = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{REPO_NAME}/main/{safe_name}"
+
+        await ctx.send(
+            f"🎵 **Track Permanently Anchored!**\n"
+            f"**Song:** {title}\n"
+            f"**Artist:** {artist}\n\n"
+            f"📋 **Copy & Paste this link into the Music Disc Maker machine:**\n"
+            f"```{direct_streaming_url}```"
+        )
 
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
